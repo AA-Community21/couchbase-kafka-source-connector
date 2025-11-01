@@ -19,10 +19,10 @@ public class KafkaProducerService {
 
     private static final String TOPIC = "couchbase-changes";
 
-    public void sendCouchbaseChange(String key, String content) {
+    public void sendCouchbaseChange(String key, CouchbaseChangeData content) {
         try {
             byte[] keyBytes = key.getBytes();
-            byte[] valueBytes = content.getBytes();
+            byte[] valueBytes = content.toBytes();
             kafkaAdmin.createTopic(TOPIC, 3, (short)3);
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(TOPIC, keyBytes, valueBytes);
 

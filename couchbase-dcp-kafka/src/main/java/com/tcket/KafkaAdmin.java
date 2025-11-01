@@ -5,6 +5,7 @@ import jakarta.annotation.PreDestroy;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,7 +70,7 @@ public class KafkaAdmin {
             try {
                 Instant start = Instant.now();
                 DescribeTopicsResult topicDescription = kafkaAdmin.describeTopics(topics);
-                Map<String, TopicDescription> tpds = topicDescription.all().get();
+                Map<Uuid, TopicDescription> tpds = topicDescription.allTopicIds().get();
 
                 List<TopicPartition> allPartitions = tpds.values().stream()
                     .flatMap(tpd -> tpd.partitions().stream()

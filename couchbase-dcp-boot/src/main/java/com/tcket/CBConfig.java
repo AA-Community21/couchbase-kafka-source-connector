@@ -1,5 +1,6 @@
 package com.tcket;
 
+import com.couchbase.client.dcp.highlevel.DatabaseChangeListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,5 +33,10 @@ public class CBConfig {
         props.put("couchbase.bucket", bucketName);
         props.put("couchbase.collection", collectionName);
         return new CouchbaseReader(props);
+    }
+
+    @Bean
+    public DatabaseChangeListener getDatabaseChangeListener() {
+        return new CouchbaseChangeListener();
     }
 }

@@ -4,15 +4,11 @@ import com.couchbase.client.dcp.Client;
 import com.couchbase.client.dcp.StreamFrom;
 import com.couchbase.client.dcp.StreamTo;
 import com.couchbase.client.dcp.highlevel.*;
-import com.couchbase.client.dcp.highlevel.internal.CollectionsManifest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
-import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 
 public class CouchbaseReader implements Runnable {
@@ -23,7 +19,7 @@ public class CouchbaseReader implements Runnable {
     private volatile boolean connected;
 
     @Autowired
-    private KafkaProducerService kafkaProducerService;
+    private DatabaseChangeListener couchbaseChangeListener;
 
     public CouchbaseReader(Map<String, String> props) {
         String connectionString = props.get("couchbase.hosts");
@@ -44,64 +40,9 @@ public class CouchbaseReader implements Runnable {
     public void start() {
         new Thread(this).start();
     }
-    
-    public void stop() {
-        shutdown();
-    }
-    
-    public List<CouchbaseChangeData> pollChanges() {
-        List<CouchbaseChangeData> changes = new ArrayList<>();
-        return changes;
-    }
 
     private void registerListener() {
-        client.nonBlockingListener(new DatabaseChangeListener() {
-            @Override
-            public void onMutation(Mutation mutation) {
-                handleChange(mutation);
-            }
-
-            @Override
-            public void onDeletion(Deletion deletion) {
-                handleChange(deletion);
-            }
-
-            @Override
-            public void onFailure(StreamFailure failure) {
-                Throwable cause = failure.getCause();
-                String errorMsg = cause != null ? cause.toString() : "Unknown cause";
-                LOGGER.error("Stream failure occurred: {}", errorMsg);
-            }
-
-            @Override
-            public void onStreamEnd(StreamEnd streamEnd) {
-                LOGGER.info("Stream ended: {}", streamEnd.getReason());
-            }
-
-            private void handleChange(DocumentChange change) {
-                try {
-                    String content = new String(change.getContent(), StandardCharsets.UTF_8);
-                    CollectionsManifest.CollectionInfo collectionInfo = change.getCollection();
-
-                    LOGGER.info("Collection ID: {}, Collection Name: {}, Scope: {}",
-                            collectionInfo.id(), collectionInfo.name(), collectionInfo.scope());
-
-                    CouchbaseChangeData changeData = new CouchbaseChangeData(
-                        change.getKey(), content, collectionInfo.name(), change.getTimestamp());
-                    kafkaProducerService.sendCouchbaseChange(change.getKey(), content);
-
-                    String sanitizedContent = content.replaceAll("[\r\n\t]", "_");
-                    LOGGER.info("Received DCP change {}, {}, {}, {} : {}", 
-                            change.getKey(), change.getCollection(), change.getTimestamp(), 
-                            change.getVbucket(), sanitizedContent);
-
-                } catch (RuntimeException ex) {
-                    LOGGER.error("Runtime error processing DCP change", ex);
-                } catch (Exception ex) {
-                    LOGGER.error("Unexpected error processing DCP change", ex);
-                }
-            }
-        });
+        client.nonBlockingListener(couchbaseChangeListener);
     }
 
     @Override
@@ -126,18 +67,4 @@ public class CouchbaseReader implements Runnable {
         }
     }
 
-    public void shutdown() {
-        try {
-            if (connected) {
-                LOGGER.info("Disconnecting Couchbase DCP Client...");
-                client.disconnect().block();
-                connected = false;
-                LOGGER.info("Disconnected successfully.");
-            }
-        } catch (RuntimeException e) {
-            LOGGER.error("Runtime error during disconnect", e);
-        } catch (Exception e) {
-            LOGGER.error("Unexpected error during disconnect", e);
-        }
-    }
 }
